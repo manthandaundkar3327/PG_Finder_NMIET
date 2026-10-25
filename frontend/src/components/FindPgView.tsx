@@ -221,8 +221,8 @@ export const FindPgView: React.FC = () => {
               [
                 { label: 'All Accommodations', value: 'all', activeClass: 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold' },
                 { label: 'Boys Only', value: 'boys', activeClass: 'bg-blue-600 text-white shadow-xs font-bold' },
-                { label: 'Girls Only', value: 'girls', activeClass: 'bg-pink-600 text-white shadow-xs font-bold' },
-                { label: 'Co-ed / Shared Flat', value: 'unisex', activeClass: 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold' },
+                { label: 'Girls Only', value: 'girls', activeClass: 'bg-[#9f1239] text-white shadow-xs font-bold' },
+                { label: 'Co-ed / Shared Flat', value: 'unisex', activeClass: 'bg-[#0f766e] text-white shadow-xs font-bold' },
               ] as const
             ).map((item) => (
               <button

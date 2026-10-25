@@ -28,24 +28,25 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({ listing,
 
   const isBoys = listing.type === 'boys';
   const isGirls = listing.type === 'girls';
+  const isCoed = listing.type === 'unisex';
 
   const modalHeaderBg = isBoys
     ? 'bg-blue-50/90 dark:bg-blue-950/70 border-blue-100 dark:border-blue-900/50 text-blue-950 dark:text-blue-100'
     : isGirls
-    ? 'bg-pink-50/90 dark:bg-pink-950/70 border-pink-100 dark:border-pink-900/50 text-pink-950 dark:text-pink-100'
-    : 'bg-slate-50 dark:bg-slate-850 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100';
+    ? 'bg-rose-50/90 dark:bg-rose-950/70 border-rose-100 dark:border-rose-900/50 text-rose-950 dark:text-pink-100'
+    : 'bg-teal-50/90 dark:bg-teal-950/70 border-teal-100 dark:border-teal-900/50 text-teal-950 dark:text-teal-100';
 
   const badgeBg = isBoys
     ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800'
     : isGirls
-    ? 'bg-pink-100 dark:bg-pink-900/60 text-pink-900 dark:text-pink-200 border-pink-200 dark:border-pink-800'
-    : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700';
+    ? 'bg-rose-100 dark:bg-rose-900/60 text-rose-900 dark:text-pink-200 border-rose-200 dark:border-rose-800'
+    : 'bg-teal-100 dark:bg-teal-900/60 text-teal-900 dark:text-teal-200 border-teal-200 dark:border-teal-800';
 
   const proximityCardBg = isBoys
     ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-200/80 dark:border-blue-900/40 text-blue-950 dark:text-blue-100'
     : isGirls
-    ? 'bg-pink-50/80 dark:bg-pink-950/40 border-pink-200/80 dark:border-pink-900/40 text-pink-950 dark:text-pink-100'
-    : 'bg-slate-50 dark:bg-slate-850 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100';
+    ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200/80 dark:border-rose-900/40 text-rose-950 dark:text-pink-100'
+    : 'bg-teal-50/80 dark:bg-teal-950/40 border-teal-200/80 dark:border-teal-900/40 text-teal-950 dark:text-teal-100';
 
   const walkingMinutes = Math.max(1, Math.round(listing.distanceMeters / 80));
   const cyclingMinutes = Math.max(1, Math.round(listing.distanceMeters / 250));

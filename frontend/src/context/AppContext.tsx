@@ -133,6 +133,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (item.id.startsWith('pg-')) {
               return {
                 ...item,
+                ...(initial ? { title: initial.title, type: initial.type } : {}),
                 roomType: resolvedRoomType,
                 postedBy: 'demo-user',
                 postedByName: 'Manthan (NMIET Student)',
@@ -225,9 +226,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const stored = localStorage.getItem('pg_finder_nmiet_theme');
       if (stored) return stored === 'dark';
-      return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return true; // Default to dark mode to match glowing themed cards
     } catch {
-      return false;
+      return true;
     }
   });
 
