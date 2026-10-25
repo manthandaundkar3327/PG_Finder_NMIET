@@ -1,4 +1,5 @@
 import React from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { ExploreView } from './components/ExploreView';
@@ -77,6 +78,7 @@ export default function App() {
   return (
     <AppProvider>
       <MainContent />
+      <Analytics />
     </AppProvider>
   );
 }
