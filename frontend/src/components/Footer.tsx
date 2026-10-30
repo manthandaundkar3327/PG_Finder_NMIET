@@ -77,18 +77,7 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Col 3: Student Neighborhoods */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-emerald-400 text-[15px] font-medium pt-1">
-              <span>For any Issue or HELP · Contact Admin</span>
-            </div>
-            <ul className="flex items-center gap-1.5 text-emerald-400 text-[15px] font-medium pt-1">
-              Manthan Daundkar · +91 9226556138 <br/>
-              Sanskar Anbhule · +91 9028176408 <br/>
-            </ul>
-          </div>
-
-          {/* Col 4: Student Safety Advisory */}
+          {/* Col 3: Student Safety Advisory */}
           <div className="space-y-2">
             <div className="text-xs font-bold text-white uppercase tracking-wider mb-2">
               Student Advisory
@@ -103,6 +92,17 @@ export const Footer: React.FC = () => {
             </div>
           </div>
         </div>
+
+          {/* Col 4: Student Neighborhoods */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-emerald-400 text-[15px] font-medium pt-1">
+              <span>For any Issue or HELP · Contact Admin</span>
+            </div>
+            <ul className="flex items-center gap-1.5 text-emerald-400 text-[15px] font-medium pt-1">
+              Manthan Daundkar · +91 9226556138 <br/>
+              Sanskar Anbhule · +91 9028176408 <br/>
+            </ul>
+          </div>
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
