@@ -50,7 +50,7 @@ export const ExploreView: React.FC = () => {
           <div className="lg:col-span-7 space-y-6">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-emerald-400 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Official Student Housing Portal · NMIET Talegaon Dabhade
+              Official Student Housing Portal · Created by ECE Department students.
             </div>
 
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight">
@@ -65,7 +65,7 @@ export const ExploreView: React.FC = () => {
               Zero brokerage, direct contact with fellow engineering students &amp; seniors.
               <br/>  
             </p>
-            <span>Platform created by ECE Department students of NMIET.</span>
+            
 
             {/* Search Bar */}
             <form onSubmit={handleSearchSubmit} className="pt-2">
