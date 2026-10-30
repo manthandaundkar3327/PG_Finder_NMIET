@@ -79,7 +79,7 @@ export const Footer: React.FC = () => {
 
           {/* Col 3: Student Neighborhoods */}
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-medium pt-1">
+            <div className="flex items-center gap-1.5 text-emerald-400 text-[20px] font-medium pt-1">
               <span>For any Issue or HELP · Contact Admin</span>
             </div>
             <ul className="space-y-1.5 text-slate-400">
