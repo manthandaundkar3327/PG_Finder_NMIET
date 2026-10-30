@@ -25,8 +25,6 @@ export const Footer: React.FC = () => {
             <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-medium pt-1">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Zero Brokerage · Direct Contact</span><br/>
-              <span>For Any Issue or HELP · Contact Admin <br/>
-              Manthan Daundkar · +91 9226556138 </span>
             </div>
           </div>
 
@@ -81,15 +79,12 @@ export const Footer: React.FC = () => {
 
           {/* Col 3: Student Neighborhoods */}
           <div className="space-y-2">
-            <div className="text-xs font-bold text-white uppercase tracking-wider mb-2">
-              Key Locations (Talegaon)
+            <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-medium pt-1">
+              <span>For any Issue or HELP · Contact Admin</span>
             </div>
             <ul className="space-y-1.5 text-slate-400">
-              <li>Samarth Colony (250m - 400m)</li>
-              <li>Yashwant Nagar (500m - 700m)</li>
-              <li>Station Road / Overbridge (1.2 km)</li>
-              <li>Maruti Mandir Chowk (800m)</li>
-              <li>Dabhade Lake / Indrayani Ground (900m)</li>
+              Manthan Daundkar · +91 9226556138 <br/>
+              Sanskar Anbhule · +91 9028176408 <br/>
             </ul>
           </div>
 
