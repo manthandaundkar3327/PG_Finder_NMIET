@@ -63,8 +63,9 @@ export const ExploreView: React.FC = () => {
 
             <p className="text-base sm:text-lg text-slate-300 max-w-xl leading-relaxed">
               Zero brokerage, direct contact with fellow engineering students &amp; seniors.
-              Browse walking-distance accommodations near Samarth Colony, Station Road, and Dabhade Lake.
+              <br/>  
             </p>
+            <span>Platform created by ECE Department students of NMIET.</span>
 
             {/* Search Bar */}
             <form onSubmit={handleSearchSubmit} className="pt-2">

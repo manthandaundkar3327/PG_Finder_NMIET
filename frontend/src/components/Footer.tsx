@@ -25,6 +25,8 @@ export const Footer: React.FC = () => {
             <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-medium pt-1">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Zero Brokerage · Direct Contact</span>
+              <span>For Any Issue or HELP · Contact Admin <br/>
+              Manthan Daundkar · +91 9226556138 </span>
             </div>
           </div>
 
