@@ -91,9 +91,9 @@ export const Footer: React.FC = () => {
               Talegaon Dabhade, Pune - 410507
             </div>
           </div>
-        </div>
+       
 
-          {/* Col 4: Student Neighborhoods */}
+          {/* Col 4: HELP */}
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 text-emerald-400 text-[15px] font-medium pt-1">
               <span>For any Issue or HELP · Contact Admin</span>
@@ -103,7 +103,7 @@ export const Footer: React.FC = () => {
               Sanskar Anbhule · +91 9028176408 <br/>
             </ul>
           </div>
-
+        </div>
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
           <div>
