@@ -1,12 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { INITIAL_USERS } from '../data/initialData.ts';
+import { dataStore } from '../data/dataStore.ts';
 import { StoredAccount } from '../types.ts';
 
 const router = Router();
 
-let accounts: StoredAccount[] = [...INITIAL_USERS];
-
-// POST /api/auth/login - Student Login
+// POST /api/auth/login - Student / Admin Login
 router.post('/login', (req: Request, res: Response) => {
   const { email, password } = req.body;
 
@@ -15,21 +13,29 @@ router.post('/login', (req: Request, res: Response) => {
   }
 
   const trimmedEmail = email.trim().toLowerCase();
-  const user = accounts.find((acc) => acc.email.toLowerCase() === trimmedEmail);
+  const user = dataStore.getUserByEmail(trimmedEmail);
 
   if (!user) {
-    // Auto-create guest student account
+    // Auto-create guest student account and persist to backend file
+    const formattedToday = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
     const newStudent: StoredAccount = {
       id: `user-${Date.now()}`,
       name: email.split('@')[0],
       email: trimmedEmail,
       phone: '+91 98000 00000',
-      role: 'student',
+      role: trimmedEmail === 'manthandaundkar33@gmail.com' ? 'admin' : 'student',
       collegeBranch: 'NMIET Engineering',
       year: 'Student',
       password: password || 'manthan',
+      createdAt: formattedToday,
     };
-    accounts.push(newStudent);
+
+    dataStore.addUser(newStudent);
 
     const { password: _, ...safeUser } = newStudent;
     return res.json({
@@ -55,9 +61,9 @@ router.post('/login', (req: Request, res: Response) => {
   });
 });
 
-// POST /api/auth/register - Student Registration
+// POST /api/auth/register - Student Registration and persist to backend file
 router.post('/register', (req: Request, res: Response) => {
-  const { name, email, phone, collegeBranch, year, password } = req.body;
+  const { name, email, phone, collegeBranch, year, password, role } = req.body;
 
   if (!name || !email || !phone) {
     return res.status(400).json({
@@ -67,7 +73,7 @@ router.post('/register', (req: Request, res: Response) => {
   }
 
   const trimmedEmail = email.trim().toLowerCase();
-  const existing = accounts.find((acc) => acc.email.toLowerCase() === trimmedEmail);
+  const existing = dataStore.getUserByEmail(trimmedEmail);
 
   if (existing) {
     return res.status(409).json({
@@ -76,18 +82,25 @@ router.post('/register', (req: Request, res: Response) => {
     });
   }
 
+  const formattedToday = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
   const newAccount: StoredAccount = {
     id: `student-${Date.now()}`,
     name: name.trim(),
     email: trimmedEmail,
     phone: phone.trim(),
-    role: 'student',
+    role: role || (trimmedEmail === 'manthandaundkar33@gmail.com' ? 'admin' : 'student'),
     collegeBranch: collegeBranch || 'Computer Engineering',
     year: year || 'Third Year (TE)',
     password: password || 'manthan',
+    createdAt: formattedToday,
   };
 
-  accounts.push(newAccount);
+  dataStore.addUser(newAccount);
 
   const { password: _, ...safeUser } = newAccount;
   res.status(201).json({
@@ -97,10 +110,107 @@ router.post('/register', (req: Request, res: Response) => {
   });
 });
 
-// GET /api/auth/users - List registered accounts
+// GET /api/auth/users - List accounts (returns accounts for admin panel)
 router.get('/users', (_req: Request, res: Response) => {
-  const safeUsers = accounts.map(({ password: _, ...user }) => user);
-  res.json({ success: true, users: safeUsers });
+  const users = dataStore.getUsers();
+  res.json({ success: true, users });
+});
+
+// POST /api/auth/users - Admin Create New User and persist to file
+router.post('/users', (req: Request, res: Response) => {
+  const { name, email, phone, role, collegeBranch, year, password } = req.body;
+
+  if (!email || !name) {
+    return res.status(400).json({ success: false, message: 'Name and email are required' });
+  }
+
+  const trimmedEmail = email.trim().toLowerCase();
+  const existing = dataStore.getUserByEmail(trimmedEmail);
+
+  if (existing) {
+    return res.status(409).json({ success: false, message: 'An account with this email already exists' });
+  }
+
+  const formattedToday = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const createdUser: StoredAccount = {
+    id: req.body.id || `user-${Date.now()}`,
+    name: name.trim(),
+    email: trimmedEmail,
+    phone: (phone || '+91 98000 00000').trim(),
+    role: role || 'student',
+    collegeBranch: collegeBranch || 'Computer Engineering',
+    year: year || 'Third Year (TE)',
+    password: password || 'password123',
+    createdAt: req.body.createdAt || formattedToday,
+  };
+
+  dataStore.addUser(createdUser);
+
+  res.status(201).json({
+    success: true,
+    message: `User ${createdUser.name} created successfully and saved to backend data file!`,
+    user: createdUser,
+  });
+});
+
+// PUT /api/auth/users/:id - Admin Update User and persist to file
+router.put('/users/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updated = dataStore.updateUser(id, req.body);
+
+  if (!updated) {
+    return res.status(404).json({ success: false, message: 'User not found' });
+  }
+
+  res.json({
+    success: true,
+    message: `User ${updated.name} updated and persisted to backend data file`,
+    user: updated,
+  });
+});
+
+// DELETE /api/auth/users/:id - Admin Delete User and update file
+router.delete('/users/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const deleted = dataStore.deleteUser(id);
+
+  if (!deleted) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot delete primary admin account or user not found',
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'User account deleted and removed from backend data file',
+  });
+});
+
+// PATCH /api/auth/users/:id/password - Admin Reset Password and persist to file
+router.patch('/users/:id/password', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.trim().length < 4) {
+    return res.status(400).json({ success: false, message: 'Password must be at least 4 characters' });
+  }
+
+  const success = dataStore.resetPassword(id, newPassword);
+
+  if (!success) {
+    return res.status(404).json({ success: false, message: 'User not found' });
+  }
+
+  res.json({
+    success: true,
+    message: 'Password reset and saved to backend data file successfully',
+  });
 });
 
 export default router;

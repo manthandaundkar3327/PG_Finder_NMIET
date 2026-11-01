@@ -1,5 +1,5 @@
 export type GenderType = 'boys' | 'girls' | 'unisex';
-export type SharingType = 'single' | 'double' | 'triple' | 'four';
+export type SharingType = number | 'single' | 'double' | 'triple' | 'four';
 
 export interface PGListing {
   id: string;
@@ -37,9 +37,10 @@ export interface UserProfile {
   name: string;
   email: string;
   phone: string;
-  role: 'student' | 'owner';
+  role?: 'student' | 'admin' | 'owner';
   collegeBranch?: string;
   year?: string;
+  createdAt?: string;
 }
 
 export interface StoredAccount extends UserProfile {

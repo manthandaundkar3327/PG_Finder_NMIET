@@ -39,6 +39,7 @@ export const EditVacancyModal: React.FC<EditVacancyModalProps> = ({ listing, onC
   const [description, setDescription] = useState(listing.description);
   const [rules, setRules] = useState<string>(listing.rules ? listing.rules.join('\n') : '');
   const [isAvailable, setIsAvailable] = useState<boolean>(listing.isAvailable);
+  const [postedDate, setPostedDate] = useState<string>(listing.postedDate || '');
 
   const handleAmenityToggle = (item: string) => {
     setAmenities((prev) =>
@@ -72,6 +73,7 @@ export const EditVacancyModal: React.FC<EditVacancyModalProps> = ({ listing, onC
       description: description.trim(),
       rules: ruleList,
       isAvailable,
+      postedDate: postedDate.trim() || listing.postedDate,
     });
   };
 
@@ -285,6 +287,33 @@ export const EditVacancyModal: React.FC<EditVacancyModalProps> = ({ listing, onC
                 onChange={(e) => setContactWhatsapp(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1">Posting Date</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={postedDate}
+                onChange={(e) => setPostedDate(e.target.value)}
+                placeholder="e.g. 01 Nov 2026 or Today"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const todayStr = new Date().toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  });
+                  setPostedDate(todayStr);
+                }}
+                className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg whitespace-nowrap cursor-pointer"
+              >
+                Today
+              </button>
             </div>
           </div>
 

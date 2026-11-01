@@ -1,0 +1,13 @@
+[
+  {
+    "id": "demo-user",
+    "name": "Manthan Daundkar",
+    "email": "manthandaundkar33@gmail.com",
+    "phone": "+91 9226556138",
+    "role": "admin",
+    "collegeBranch": "ECE",
+    "year": "Second Year (SY)",
+    "password": "manthan",
+    "createdAt": "01 Nov 2026"
+  }
+]

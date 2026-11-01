@@ -84,6 +84,7 @@ const INITIAL_USERS: StoredAccount[] = [
     collegeBranch: 'Computer Engineering',
     year: 'Third Year (TE)',
     password: 'manthan',
+    createdAt: '01 Nov 2026',
   },
   {
     id: 'student-tanmay',
@@ -94,6 +95,7 @@ const INITIAL_USERS: StoredAccount[] = [
     collegeBranch: 'Information Technology',
     year: 'Final Year (BE)',
     password: 'password123',
+    createdAt: '01 Nov 2026',
   },
   {
     id: 'student-shreya',
@@ -104,6 +106,7 @@ const INITIAL_USERS: StoredAccount[] = [
     collegeBranch: 'Computer Engineering',
     year: 'Second Year (SE)',
     password: 'password123',
+    createdAt: '01 Nov 2026',
   },
   {
     id: 'student-rohit',
@@ -114,6 +117,7 @@ const INITIAL_USERS: StoredAccount[] = [
     collegeBranch: 'Mechanical Engineering',
     year: 'Third Year (TE)',
     password: 'password123',
+    createdAt: '01 Nov 2026',
   },
 ];
 
@@ -126,24 +130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Keep all demo vacancies assigned to demo account posts
-          return parsed.map((item: PGListing) => {
-            const initial = INITIAL_LISTINGS.find((init) => init.id === item.id);
-            const resolvedRoomType = item.roomType || initial?.roomType || '2 BHK';
-            if (item.id.startsWith('pg-')) {
-              return {
-                ...item,
-                ...(initial ? { title: initial.title, type: initial.type } : {}),
-                roomType: resolvedRoomType,
-                postedBy: 'demo-user',
-                postedByName: 'Manthan (NMIET Student)',
-              };
-            }
-            return {
-              ...item,
-              roomType: resolvedRoomType,
-            };
-          });
+          return parsed;
         }
       }
     } catch {
@@ -189,10 +176,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
-      // Clean up legacy auto-login if stored previously in localStorage
       localStorage.removeItem('pg_finder_nmiet_user');
-
-      // Check current browser tab session
       const sessionStored = sessionStorage.getItem('pg_finder_nmiet_user');
       if (sessionStored) {
         const parsed = JSON.parse(sessionStored);
@@ -203,13 +187,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {
       // Fallback
     }
-    // Default to null: do not keep signed in as admin when site opens
     return null;
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
-
   const [activeTab, setActiveTab] = useState<TabType>('explore');
 
   const isAdmin = Boolean(
@@ -217,6 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (currentUser.role === 'admin' ||
         currentUser.email.toLowerCase() === 'manthandaundkar33@gmail.com')
   );
+
   const [selectedListing, setSelectedListing] = useState<PGListing | null>(null);
   const [editingListing, setEditingListing] = useState<PGListing | null>(null);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
@@ -226,11 +209,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const stored = localStorage.getItem('pg_finder_nmiet_theme');
       if (stored) return stored === 'dark';
-      return true; // Default to dark mode to match glowing themed cards
+      return true;
     } catch {
       return true;
     }
   });
+
+  // Sync initial data from backend API on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch('/api/listings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && Array.isArray(data.listings) && data.listings.length > 0) {
+          setListings(data.listings);
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend listings not loaded directly, using local store', err);
+      });
+
+    fetch('/api/auth/users')
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && Array.isArray(data.users) && data.users.length > 0) {
+          setAccounts(data.users);
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend users not loaded directly, using local store', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -250,7 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsDarkMode((prev) => !prev);
   };
 
-  // Persist listings
+  // Persist listings to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('pg_finder_nmiet_listings', JSON.stringify(listings));
@@ -268,7 +282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [savedIds]);
 
-  // Persist user session to sessionStorage (resets when closing browser or opening new window)
+  // Persist user session to sessionStorage
   useEffect(() => {
     try {
       if (currentUser) {
@@ -320,21 +334,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (acc) => acc.email.toLowerCase() === email.trim().toLowerCase()
     );
     if (!found) {
-      // Auto-create friendly student session if not found
+      const formattedToday = new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
       const newAcc: StoredAccount = {
         id: `user-${Date.now()}`,
         name: email.split('@')[0],
         email: email.trim(),
         phone: '+91 98000 00000',
-        role: 'student',
+        role: email.trim().toLowerCase() === 'manthandaundkar33@gmail.com' ? 'admin' : 'student',
         collegeBranch: 'NMIET Engineering',
         year: 'Student',
         password: password || 'manthan',
+        createdAt: formattedToday,
       };
       setAccounts((prev) => [...prev, newAcc]);
       setCurrentUser(newAcc);
       showToast(`Welcome to PG Finder NMIET, ${newAcc.name}!`, 'success');
       closeAuthModal();
+
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newAcc.email, password: newAcc.password }),
+      }).catch((err) => console.warn('Login sync error:', err));
+
       return true;
     }
 
@@ -347,6 +373,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(userSafe);
     showToast(`Logged in successfully as ${found.name}!`, 'success');
     closeAuthModal();
+
+    fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }).catch((err) => console.warn('Login sync error:', err));
+
     return true;
   };
 
@@ -359,11 +392,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
+    const formattedToday = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
     const newId = `user-${Date.now()}`;
     const newAccount: StoredAccount = {
       ...profile,
       id: newId,
       password: password || 'pass123',
+      createdAt: formattedToday,
     };
 
     setAccounts((prev) => [...prev, newAccount]);
@@ -371,6 +411,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(userSafe);
     showToast(`Registration complete! Welcome, ${profile.name}.`, 'success');
     closeAuthModal();
+
+    fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newAccount),
+    }).catch((err) => console.warn('Register sync error:', err));
+
     return true;
   };
 
@@ -397,38 +444,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isSaved = (id: string) => savedIds.includes(id);
 
+  // Add Listing (Student or Admin) -> Updates state and backend data file
   const addListing = (
     newListingData: Omit<PGListing, 'id' | 'postedDate' | 'rating' | 'reviewsCount'>
   ) => {
+    const formattedToday = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
     const newListing: PGListing = {
       ...newListingData,
       id: `pg-${Date.now()}`,
-      postedDate: 'Today',
+      postedDate: formattedToday,
       rating: 5.0,
       reviewsCount: 1,
     };
+
     setListings((prev) => [newListing, ...prev]);
-    showToast('Vacancy published successfully!', 'success');
+    showToast('Vacancy published and updated in backend data files!', 'success');
     setActiveTab('my-posts');
+
+    fetch('/api/listings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newListing),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.listing) {
+          setListings((prev) =>
+            prev.map((item) => (item.id === newListing.id ? data.listing : item))
+          );
+        }
+      })
+      .catch((err) => console.error('Failed to save listing to backend file:', err));
   };
 
+  // Update Listing (Student or Admin) -> Updates state and backend data file
   const updateListing = (updated: PGListing) => {
     setListings((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
     if (selectedListing?.id === updated.id) {
       setSelectedListing(updated);
     }
-    showToast('Vacancy updated successfully', 'success');
+    showToast('Vacancy data and date updated in backend files', 'success');
     setEditingListing(null);
+
+    fetch(`/api/listings/${updated.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    }).catch((err) => console.error('Failed to update listing on backend file:', err));
   };
 
+  // Delete Listing -> Removes from state and backend data file
   const deleteListing = (id: string) => {
     setListings((prev) => prev.filter((item) => item.id !== id));
     if (selectedListing?.id === id) {
       setSelectedListing(null);
     }
-    showToast('Listing deleted', 'info');
+    showToast('Listing removed from backend data files', 'info');
+
+    fetch(`/api/listings/${id}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('Failed to delete listing on backend file:', err));
   };
 
+  // Toggle Availability -> Updates state and backend data file
   const toggleAvailability = (id: string) => {
     setListings((prev) =>
       prev.map((item) => {
@@ -443,8 +526,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return item;
       })
     );
+
+    fetch(`/api/listings/${id}/availability`, {
+      method: 'PATCH',
+    }).catch((err) => console.error('Failed to toggle availability on backend:', err));
   };
 
+  // Admin Toggle Verified -> Updates state and backend data file
   const adminToggleVerified = (id: string) => {
     setListings((prev) =>
       prev.map((item) => {
@@ -461,8 +549,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return item;
       })
     );
+
+    fetch(`/api/listings/${id}/verified`, {
+      method: 'PATCH',
+    }).catch((err) => console.error('Failed to toggle verified status on backend:', err));
   };
 
+  // Admin Update User -> Updates state and backend data file
   const adminUpdateUser = (updatedUser: StoredAccount) => {
     setAccounts((prev) =>
       prev.map((acc) => (acc.id === updatedUser.id ? updatedUser : acc))
@@ -471,9 +564,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { password: _, ...safeUser } = updatedUser;
       setCurrentUser(safeUser);
     }
-    showToast(`User account "${updatedUser.name}" updated`, 'success');
+    showToast(`User account "${updatedUser.name}" updated in backend files`, 'success');
+
+    fetch(`/api/auth/users/${updatedUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedUser),
+    }).catch((err) => console.error('Failed to update user on backend:', err));
   };
 
+  // Admin Delete User -> Removes from state and backend data file
   const adminDeleteUser = (userId: string): boolean => {
     const target = accounts.find((a) => a.id === userId);
     if (!target) return false;
@@ -485,10 +585,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
     setAccounts((prev) => prev.filter((a) => a.id !== userId));
-    showToast(`Account for "${target.name}" deleted`, 'info');
+    showToast(`Account for "${target.name}" removed from backend files`, 'info');
+
+    fetch(`/api/auth/users/${userId}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('Failed to delete user on backend:', err));
+
     return true;
   };
 
+  // Admin Create User -> Adds to state and backend data file
   const adminCreateUser = (newUser: StoredAccount): boolean => {
     const existing = accounts.find(
       (a) => a.email.toLowerCase() === newUser.email.trim().toLowerCase()
@@ -497,16 +603,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('An account with this email already exists', 'error');
       return false;
     }
+    const formattedToday = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
     const created: StoredAccount = {
       ...newUser,
       id: newUser.id || `user-${Date.now()}`,
       email: newUser.email.trim(),
+      createdAt: newUser.createdAt || formattedToday,
     };
     setAccounts((prev) => [...prev, created]);
-    showToast(`New user "${created.name}" created successfully`, 'success');
+    showToast(`New user "${created.name}" created and saved to backend file`, 'success');
+
+    fetch('/api/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(created),
+    }).catch((err) => console.error('Failed to create user on backend:', err));
+
     return true;
   };
 
+  // Admin Reset Password -> Updates state and backend data file
   const adminResetPassword = (userId: string, newPassword: string): boolean => {
     if (!newPassword || newPassword.trim().length < 4) {
       showToast('Password must be at least 4 characters', 'error');
@@ -517,10 +637,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         acc.id === userId ? { ...acc, password: newPassword.trim() } : acc
       )
     );
-    showToast('Password updated successfully', 'success');
+    showToast('Password updated and saved to backend file', 'success');
+
+    fetch(`/api/auth/users/${userId}/password`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword }),
+    }).catch((err) => console.error('Failed to reset password on backend:', err));
+
     return true;
   };
 
+  // Admin Reset All Data -> Resets state and backend data files to default seed
   const adminResetAllData = () => {
     setListings(INITIAL_LISTINGS);
     setAccounts(INITIAL_USERS);
@@ -529,7 +657,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('pg_finder_nmiet_listings');
     localStorage.removeItem('pg_finder_nmiet_accounts');
     localStorage.removeItem('pg_finder_nmiet_saved');
-    showToast('All platform data reset to default seed state', 'info');
+    showToast('All platform data reset to default seed state in backend files', 'info');
+
+    fetch('/api/admin/reset', {
+      method: 'POST',
+    }).catch((err) => console.error('Failed to reset backend files:', err));
   };
 
   const adminExportData = (): string => {
@@ -544,6 +676,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return JSON.stringify(exportObject, null, 2);
   };
 
+  // Admin Import Data -> Imports and writes directly to backend data files
   const adminImportData = (jsonData: string): boolean => {
     try {
       const parsed = JSON.parse(jsonData);
@@ -553,7 +686,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (Array.isArray(parsed.accounts)) {
         setAccounts(parsed.accounts);
       }
-      showToast('Platform data imported successfully!', 'success');
+      showToast('Platform data imported and written to backend data files!', 'success');
+
+      fetch('/api/admin/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonData,
+      }).catch((err) => console.error('Failed to import data to backend files:', err));
+
       return true;
     } catch {
       showToast('Invalid backup JSON format', 'error');

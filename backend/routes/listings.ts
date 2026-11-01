@@ -1,17 +1,14 @@
 import { Router, Request, Response } from 'express';
-import { INITIAL_LISTINGS } from '../data/initialData.ts';
+import { dataStore } from '../data/dataStore.ts';
 import { PGListing } from '../types.ts';
 
 const router = Router();
-
-// In-memory data store for backend
-let listings: PGListing[] = [...INITIAL_LISTINGS];
 
 // GET /api/listings - Get all listings with search and filter queries
 router.get('/', (req: Request, res: Response) => {
   const { query, gender, sharing, maxRent, maxDistance, foodRequired } = req.query;
 
-  let results = [...listings];
+  let results = dataStore.getListings();
 
   if (typeof query === 'string' && query.trim()) {
     const q = query.toLowerCase();
@@ -33,7 +30,7 @@ router.get('/', (req: Request, res: Response) => {
   }
 
   if (sharing && sharing !== 'all') {
-    results = results.filter((item) => item.sharing === sharing);
+    results = results.filter((item) => String(item.sharing) === String(sharing));
   }
 
   if (maxRent) {
@@ -64,7 +61,7 @@ router.get('/', (req: Request, res: Response) => {
 // GET /api/listings/:id - Get listing by ID
 router.get('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
-  const listing = listings.find((l) => l.id === id);
+  const listing = dataStore.getListingById(id);
 
   if (!listing) {
     return res.status(404).json({ success: false, message: 'Listing not found' });
@@ -73,7 +70,7 @@ router.get('/:id', (req: Request, res: Response) => {
   res.json({ success: true, listing });
 });
 
-// POST /api/listings - Create new PG listing
+// POST /api/listings - Create new PG listing and write directly to file
 router.post('/', (req: Request, res: Response) => {
   const body = req.body;
 
@@ -84,8 +81,15 @@ router.post('/', (req: Request, res: Response) => {
     });
   }
 
+  // Format today's real date, e.g. "01 Nov 2026"
+  const formattedToday = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
   const newListing: PGListing = {
-    id: `pg-${Date.now()}`,
+    id: body.id || `pg-${Date.now()}`,
     title: body.title,
     type: body.type || 'boys',
     sharing: body.sharing || 'double',
@@ -101,79 +105,86 @@ router.post('/', (req: Request, res: Response) => {
     contactName: body.contactName || 'Host Contact',
     contactPhone: body.contactPhone,
     contactWhatsapp: body.contactWhatsapp || body.contactPhone,
-    isAvailable: true,
+    isAvailable: body.isAvailable !== undefined ? Boolean(body.isAvailable) : true,
     postedBy: body.postedBy || 'demo-user',
     postedByName: body.postedByName || 'Manthan (NMIET Student)',
-    postedDate: 'Just now',
+    postedDate: body.postedDate || formattedToday,
     description: body.description || 'Verified accommodation near NMIET',
     rules: Array.isArray(body.rules) ? body.rules : [],
-    isVerified: true,
+    isVerified: body.isVerified !== undefined ? Boolean(body.isVerified) : true,
     electricityCharges: body.electricityCharges || 'Included in rent',
     noticePeriodDays: body.noticePeriodDays || 30,
-    rating: 4.8,
-    reviewsCount: 1,
+    rating: body.rating || 4.8,
+    reviewsCount: body.reviewsCount || 1,
   };
 
-  listings.unshift(newListing);
+  const created = dataStore.addListing(newListing);
 
   res.status(201).json({
     success: true,
-    message: 'Vacancy listed successfully!',
-    listing: newListing,
+    message: 'Vacancy listed successfully and saved to backend data file!',
+    listing: created,
   });
 });
 
-// PUT /api/listings/:id - Update existing listing
+// PUT /api/listings/:id - Update existing listing and write directly to file
 router.put('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
-  const index = listings.findIndex((l) => l.id === id);
+  const updated = dataStore.updateListing(id, req.body);
 
-  if (index === -1) {
+  if (!updated) {
     return res.status(404).json({ success: false, message: 'Listing not found' });
   }
 
-  listings[index] = {
-    ...listings[index],
-    ...req.body,
-    id, // protect ID from changing
-  };
-
   res.json({
     success: true,
-    message: 'Listing updated successfully',
-    listing: listings[index],
+    message: 'Listing updated successfully and saved to backend data file',
+    listing: updated,
   });
 });
 
-// PATCH /api/listings/:id/availability - Toggle availability
+// PATCH /api/listings/:id/availability - Toggle availability and write to file
 router.patch('/:id/availability', (req: Request, res: Response) => {
   const { id } = req.params;
-  const listing = listings.find((l) => l.id === id);
+  const isAvailable = dataStore.toggleAvailability(id);
 
-  if (!listing) {
+  if (isAvailable === null) {
     return res.status(404).json({ success: false, message: 'Listing not found' });
   }
-
-  listing.isAvailable = !listing.isAvailable;
 
   res.json({
     success: true,
-    message: `Listing is now marked as ${listing.isAvailable ? 'Available' : 'Occupied'}`,
-    isAvailable: listing.isAvailable,
+    message: `Listing is now marked as ${isAvailable ? 'Available' : 'Occupied'}`,
+    isAvailable,
   });
 });
 
-// DELETE /api/listings/:id - Delete a listing
-router.delete('/:id', (req: Request, res: Response) => {
+// PATCH /api/listings/:id/verified - Toggle verified status and write to file
+router.patch('/:id/verified', (req: Request, res: Response) => {
   const { id } = req.params;
-  const initialLength = listings.length;
-  listings = listings.filter((l) => l.id !== id);
+  const isVerified = dataStore.toggleVerified(id);
 
-  if (listings.length === initialLength) {
+  if (isVerified === null) {
     return res.status(404).json({ success: false, message: 'Listing not found' });
   }
 
-  res.json({ success: true, message: 'Listing deleted successfully' });
+  res.json({
+    success: true,
+    message: `Listing verification set to ${isVerified}`,
+    isVerified,
+  });
+});
+
+// DELETE /api/listings/:id - Delete a listing and write to file
+router.delete('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const deleted = dataStore.deleteListing(id);
+
+  if (!deleted) {
+    return res.status(404).json({ success: false, message: 'Listing not found' });
+  }
+
+  res.json({ success: true, message: 'Listing deleted successfully and removed from backend data file' });
 });
 
 export default router;

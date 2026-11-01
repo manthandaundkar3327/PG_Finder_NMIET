@@ -65,6 +65,7 @@ export interface UserProfile {
   role?: 'student' | 'admin';
   collegeBranch?: string;
   year?: string;
+  createdAt?: string;
 }
 
 export interface StoredAccount extends UserProfile {
