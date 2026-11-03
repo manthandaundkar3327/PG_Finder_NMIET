@@ -32,6 +32,9 @@ import {
   X,
   FileText,
   BadgeCheck,
+  Database,
+  Cloud,
+  RefreshCw,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
@@ -94,6 +97,76 @@ export const AdminView: React.FC = () => {
 
   // Backup import JSON state
   const [importJsonText, setImportJsonText] = useState('');
+
+  // Cloud Database state
+  const [cloudStatus, setCloudStatus] = useState<{
+    configured: boolean;
+    projectUrl: string | null;
+    message: string;
+    loading: boolean;
+  }>({
+    configured: false,
+    projectUrl: null,
+    message: '',
+    loading: false,
+  });
+
+  const checkCloudStatus = () => {
+    setCloudStatus((prev) => ({ ...prev, loading: true }));
+    fetch('/api/admin/cloud-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setCloudStatus({
+            configured: Boolean(data.configured),
+            projectUrl: data.projectUrl,
+            message: data.message,
+            loading: false,
+          });
+        }
+      })
+      .catch(() => setCloudStatus((prev) => ({ ...prev, loading: false })));
+  };
+
+  const handleCloudPush = async () => {
+    setCloudStatus((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await fetch('/api/admin/cloud-sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Data synced to Supabase Cloud!', 'success');
+      } else {
+        showToast(data.message || 'Sync failed. Check .env config.', 'error');
+      }
+    } catch {
+      showToast('Network error while pushing to Supabase Cloud', 'error');
+    } finally {
+      checkCloudStatus();
+    }
+  };
+
+  const handleCloudPull = async () => {
+    setCloudStatus((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await fetch('/api/admin/cloud-pull', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Pulled live data from Supabase Cloud!', 'success');
+      } else {
+        showToast(data.message || 'Pull failed. Check .env config.', 'error');
+      }
+    } catch {
+      showToast('Network error while pulling from Supabase Cloud', 'error');
+    } finally {
+      checkCloudStatus();
+    }
+  };
+
+  React.useEffect(() => {
+    if (adminTab === 'backup') {
+      checkCloudStatus();
+    }
+  }, [adminTab]);
 
   // If not admin, show access denied screen
   if (!isAdmin) {
@@ -729,6 +802,80 @@ export const AdminView: React.FC = () => {
       {/* TAB 3: SYSTEM & BACKUP */}
       {adminTab === 'backup' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card 0: Real Cloud Database (Supabase PostgreSQL) */}
+          <div className="md:col-span-2 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-purple-500/10 dark:from-emerald-950/40 dark:via-teal-950/20 dark:to-purple-950/30 rounded-2xl border border-emerald-300 dark:border-emerald-800/80 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Supabase Cloud Database (PostgreSQL)</span>
+                    {cloudStatus.configured ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Live Connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                        Config Pending (.env)
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {cloudStatus.configured
+                      ? `Authoritative Cloud Source: ${cloudStatus.projectUrl || 'Supabase Cloud'}`
+                      : 'Operating in local sync mode. Add SUPABASE_URL and SUPABASE_ANON_KEY to .env to connect.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={checkCloudStatus}
+                  disabled={cloudStatus.loading}
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Check live cloud connection"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${cloudStatus.loading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+                {cloudStatus.configured && (
+                  <>
+                    <button
+                      onClick={handleCloudPull}
+                      disabled={cloudStatus.loading}
+                      className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="Pull latest live data from Supabase Cloud"
+                    >
+                      <Cloud className="w-3.5 h-3.5" />
+                      <span>Pull Cloud Data</span>
+                    </button>
+                    <button
+                      onClick={handleCloudPush}
+                      disabled={cloudStatus.loading}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="Upload and seed all local listings & users to Supabase Cloud"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Sync All to Cloud</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white/80 dark:bg-slate-900/80 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="font-semibold text-slate-900 dark:text-white">Single Source of Truth: </span>
+                Every student and admin on any device reads and writes to this cloud database in real time.
+              </div>
+              <div className="text-[11px] font-mono text-slate-500 shrink-0">
+                Schema: <code className="text-purple-600 dark:text-purple-400">supabase-schema.sql</code>
+              </div>
+            </div>
+          </div>
           {/* Card 1: JSON Export & Backup */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
             <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-sm">

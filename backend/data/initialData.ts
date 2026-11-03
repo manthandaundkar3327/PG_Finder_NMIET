@@ -5,11 +5,44 @@ export const INITIAL_USERS: StoredAccount[] = [
     "id": "demo-user",
     "name": "Manthan Daundkar",
     "email": "manthandaundkar33@gmail.com",
-    "phone": "+91 9226556138",
+    "phone": "+91 97654 32190",
     "role": "admin",
-    "collegeBranch": "ECE",
-    "year": "Second Year (SY)",
+    "collegeBranch": "Computer Engineering",
+    "year": "Third Year (TE)",
     "password": "manthan",
+    "createdAt": "01 Nov 2026"
+  },
+  {
+    "id": "student-tanmay",
+    "name": "Tanmay Joshi",
+    "email": "tanmay.joshi@nmiet.edu.in",
+    "phone": "+91 91580 44221",
+    "role": "student",
+    "collegeBranch": "Information Technology",
+    "year": "Final Year (BE)",
+    "password": "password123",
+    "createdAt": "01 Nov 2026"
+  },
+  {
+    "id": "student-shreya",
+    "name": "Shreya Kulkarni",
+    "email": "shreya.k@nmiet.edu.in",
+    "phone": "+91 98220 55114",
+    "role": "student",
+    "collegeBranch": "Computer Engineering",
+    "year": "Second Year (SE)",
+    "password": "password123",
+    "createdAt": "01 Nov 2026"
+  },
+  {
+    "id": "student-rohit",
+    "name": "Rohit Sharma",
+    "email": "rohit.sharma@nmiet.edu.in",
+    "phone": "+91 98231 77620",
+    "role": "student",
+    "collegeBranch": "Mechanical Engineering",
+    "year": "Third Year (TE)",
+    "password": "password123",
     "createdAt": "01 Nov 2026"
   }
 ];
@@ -17,7 +50,7 @@ export const INITIAL_USERS: StoredAccount[] = [
 export const INITIAL_LISTINGS: PGListing[] = [
   {
     "id": "pg-1",
-    "title": "Demo Boys",
+    "title": "Sai Krupa Boys PG",
     "type": "boys",
     "sharing": "double",
     "roomType": "2 BHK",
@@ -37,24 +70,19 @@ export const INITIAL_LISTINGS: PGListing[] = [
       "CCTV & Biometric Access",
       "Bike Parking"
     ],
+    "images": [],
     "contactName": "Manthan (Student Host)",
-    "contactPhone": "+91 9226556138",
-    "contactWhatsapp": "+91 9226556138",
+    "contactPhone": "+91 97654 32190",
+    "contactWhatsapp": "919765432190",
     "isAvailable": true,
     "postedBy": "demo-user",
     "postedByName": "Manthan (NMIET Student)",
     "postedDate": "30 Oct 2026",
     "description": "Purpose-built student living space just a 4-minute walk from NMIET college gate. Spacious twin-sharing rooms with individual study tables, ergonomic chairs, mattress, and large cupboards. 24/7 solar hot water, 100 Mbps Wi-Fi, and peaceful atmosphere for engineering students.",
-    "rules": [
-      "Main entry closes at 10:30 PM (permission required for late lab work)",
-      "Strictly non-smoking and alcohol-free premises",
-      "Study hours silence after 11:00 PM",
-      "Guests allowed in visitor lounge only"
-    ],
+    "rules": [],
     "rating": 4.8,
-    "reviewsCount": 38,
+    "reviewsCount": 1,
     "isVerified": true,
-    "roomSizeSqFt": 180,
     "electricityCharges": "Included in rent",
     "noticePeriodDays": 30
   },
@@ -80,24 +108,20 @@ export const INITIAL_LISTINGS: PGListing[] = [
       "Attached Washroom",
       "Backup Inverter"
     ],
-    "contactName": "Manthan (Student Host)",
-    "contactPhone": "+91 9226556138",
-    "contactWhatsapp": "+91 9226556138",
+    "images": [],
+    "contactName": "Sunita Deshmukh (Warden)",
+    "contactPhone": "+91 94235 67812",
+    "contactWhatsapp": "919423567812",
     "isAvailable": true,
     "postedBy": "demo-user",
     "postedByName": "Manthan (NMIET Student)",
     "postedDate": "01 Nov 2026",
     "description": "Safe, hygienic, and student-focused girls PG with round-the-clock security and CCTV monitoring. Nutritious home-cooked Maharashtrian breakfast, lunch box packing, and dinner provided. Twin-sharing rooms with attached clean bathrooms and balcony.",
-    "rules": [
-      "Night curfew: 9:30 PM (Parents notified for late returns)",
-      "Visitors permitted in ground floor reception only",
-      "Cleanliness of personal study spaces expected"
-    ],
-    "rating": 4.9,
-    "reviewsCount": 52,
+    "rules": [],
+    "rating": 4.8,
+    "reviewsCount": 1,
     "isVerified": true,
-    "roomSizeSqFt": 210,
-    "electricityCharges": "Included up to 50 units/month",
+    "electricityCharges": "Included in rent",
     "noticePeriodDays": 30
   },
   {
@@ -122,24 +146,20 @@ export const INITIAL_LISTINGS: PGListing[] = [
       "Sofa & Dining Area",
       "Bike & Car Parking"
     ],
+    "images": [],
     "contactName": "Manthan (NMIET Final Year)",
-    "contactPhone": "+91 9226556138",
-    "contactWhatsapp": "+91 9226556138",
+    "contactPhone": "+91 97654 32190",
+    "contactWhatsapp": "919765432190",
     "isAvailable": true,
     "postedBy": "demo-user",
     "postedByName": "Manthan (NMIET Student)",
     "postedDate": "26 Oct 2026",
     "description": "We have one bed vacant in a very peaceful 2BHK flat. Looking for a neat and disciplined roommate (fellow engineering student or intern). Fully furnished flat with fridge, washing machine, gas stove, and high-speed Wi-Fi.",
-    "rules": [
-      "Respect each other privacy and study routine",
-      "Share kitchen cleaning and groceries equally",
-      "Friends welcome with mutual consent"
-    ],
-    "rating": 4.9,
-    "reviewsCount": 22,
+    "rules": [],
+    "rating": 4.8,
+    "reviewsCount": 1,
     "isVerified": true,
-    "roomSizeSqFt": 200,
-    "electricityCharges": "Shared 1/4th (~₹350/mo)",
+    "electricityCharges": "Included in rent",
     "noticePeriodDays": 30
   }
 ];

@@ -3,6 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { PGListing, StoredAccount } from '../types.ts';
 import { INITIAL_USERS, INITIAL_LISTINGS } from './initialData.ts';
+import {
+  getSupabaseClient,
+  isSupabaseConfigured,
+  toSupabaseListing,
+  fromSupabaseListing,
+  toSupabaseUser,
+  fromSupabaseUser,
+} from './supabaseClient.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,15 +35,14 @@ class DataStore {
   private listings: PGListing[] = [];
   private users: StoredAccount[] = [];
   private listeners: Set<DataChangeListener> = new Set();
+  private supabaseRealtimeSubscribed = false;
 
   constructor() {
     this.loadInitialData();
+    // Connect and synchronize with Supabase Cloud Database if configured
+    this.initSupabaseSync();
   }
 
-  /**
-   * Register a callback listener for realtime change events.
-   * Returns an unsubscribe function.
-   */
   public subscribe(listener: DataChangeListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -59,7 +66,6 @@ class DataStore {
   }
 
   private loadInitialData() {
-    // Try to load from JSON files first if present, otherwise fallback to initialData.ts
     try {
       if (fs.existsSync(listingsJsonFilePath)) {
         const raw = fs.readFileSync(listingsJsonFilePath, 'utf-8');
@@ -92,13 +98,132 @@ class DataStore {
       this.users = JSON.parse(JSON.stringify(INITIAL_USERS));
     }
 
-    // Save initial state to both files on startup without broadcasting
     this.saveToFile('init', false);
   }
 
+  private async safeCloudOp(op: () => PromiseLike<any>, desc: string) {
+    try {
+      const res = await op();
+      if (res?.error) {
+        console.warn(`[Supabase Cloud] ${desc} warning:`, res.error.message);
+      }
+    } catch (err) {
+      console.error(`[Supabase Cloud] ${desc} error:`, err);
+    }
+  }
+
+  // --- SUPABASE CLOUD DATABASE SYNC & REALTIME ---
+
+  public async initSupabaseSync(): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      console.log('[Supabase Cloud] No cloud credentials detected yet. Operating in synchronized local fallback mode.');
+      return false;
+    }
+
+    const client = getSupabaseClient();
+    if (!client) return false;
+
+    console.log('[Supabase Cloud] Fetching authoritative source data from cloud PostgreSQL database...');
+
+    try {
+      // 1. Fetch Listings from Cloud
+      const { data: cloudListings, error: lErr } = await client.from('listings').select('*');
+      if (lErr) {
+        console.warn('[Supabase Cloud] Listings read error:', lErr.message);
+      } else if (Array.isArray(cloudListings) && cloudListings.length > 0) {
+        this.listings = cloudListings.map(fromSupabaseListing);
+        console.log(`[Supabase Cloud] Loaded ${this.listings.length} live listings from Cloud Database!`);
+      } else if (Array.isArray(cloudListings) && cloudListings.length === 0 && this.listings.length > 0) {
+        // Cloud is empty -> auto seed from current dataset
+        console.log('[Supabase Cloud] Cloud listings table is empty. Auto-seeding initial vacancies to Cloud Database...');
+        await client.from('listings').upsert(this.listings.map(toSupabaseListing));
+      }
+
+      // 2. Fetch Users from Cloud
+      const { data: cloudUsers, error: uErr } = await client.from('users').select('*');
+      if (uErr) {
+        console.warn('[Supabase Cloud] Users read error:', uErr.message);
+      } else if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+        this.users = cloudUsers.map(fromSupabaseUser);
+        console.log(`[Supabase Cloud] Loaded ${this.users.length} live user accounts from Cloud Database!`);
+      } else if (Array.isArray(cloudUsers) && cloudUsers.length === 0 && this.users.length > 0) {
+        console.log('[Supabase Cloud] Cloud users table is empty. Auto-seeding initial users to Cloud Database...');
+        await client.from('users').upsert(this.users.map(toSupabaseUser));
+      }
+
+      // Save local snapshot & notify all connected SSE clients
+      this.saveToFile('cloud_sync', true);
+
+      // 3. Setup Supabase Realtime channel for instant cross-device updates
+      this.setupSupabaseRealtime(client);
+      return true;
+    } catch (err) {
+      console.error('[Supabase Cloud] Synchronization error:', err);
+      return false;
+    }
+  }
+
+  private setupSupabaseRealtime(client: ReturnType<typeof getSupabaseClient>) {
+    if (!client || this.supabaseRealtimeSubscribed) return;
+    this.supabaseRealtimeSubscribed = true;
+
+    try {
+      client
+        .channel('cloud-pg-finder-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'listings' }, async (payload) => {
+          console.log('[Supabase Cloud Realtime] Remote listing change detected:', payload.eventType);
+          const { data } = await client.from('listings').select('*');
+          if (Array.isArray(data)) {
+            this.listings = data.map(fromSupabaseListing);
+            this.saveToFile('cloud_realtime_listing_update', true);
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, async (payload) => {
+          console.log('[Supabase Cloud Realtime] Remote user change detected:', payload.eventType);
+          const { data } = await client.from('users').select('*');
+          if (Array.isArray(data)) {
+            this.users = data.map(fromSupabaseUser);
+            this.saveToFile('cloud_realtime_user_update', true);
+          }
+        })
+        .subscribe((status) => {
+          console.log(`[Supabase Cloud Realtime] Channel subscription status: ${status}`);
+        });
+    } catch (err) {
+      console.warn('[Supabase Cloud Realtime] Subscription error:', err);
+    }
+  }
+
   /**
-   * Persists current memory state directly into backend/data/initialData.ts
-   * and auxiliary listings.json & users.json, then immediately broadcasts to all connected clients.
+   * Pushes all local listings and users to Supabase Cloud
+   */
+  public async syncAllToSupabase(): Promise<{ success: boolean; message: string }> {
+    const client = getSupabaseClient();
+    if (!client) {
+      return { success: false, message: 'Supabase credentials not configured in .env' };
+    }
+
+    try {
+      const listingRows = this.listings.map(toSupabaseListing);
+      const userRows = this.users.map(toSupabaseUser);
+
+      const { error: lErr } = await client.from('listings').upsert(listingRows);
+      if (lErr) throw lErr;
+
+      const { error: uErr } = await client.from('users').upsert(userRows);
+      if (uErr) throw uErr;
+
+      return {
+        success: true,
+        message: `Successfully uploaded ${listingRows.length} listings and ${userRows.length} users to Supabase Cloud Database!`,
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to sync to Supabase' };
+    }
+  }
+
+  /**
+   * Persists current state directly to initialData.ts, listings.json, and users.json
    */
   public saveToFile(action = 'update', shouldNotify = true): boolean {
     try {
@@ -112,8 +237,6 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
       fs.writeFileSync(initialDataFilePath, tsContent, 'utf-8');
       fs.writeFileSync(listingsJsonFilePath, JSON.stringify(this.listings, null, 2), 'utf-8');
       fs.writeFileSync(usersJsonFilePath, JSON.stringify(this.users, null, 2), 'utf-8');
-      
-      console.log(`[DataStore] Persisted ${this.listings.length} listings and ${this.users.length} users to initialData.ts and JSON files. Action: ${action}`);
 
       if (shouldNotify) {
         this.notify(action);
@@ -125,7 +248,7 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     }
   }
 
-  // --- LISTINGS OPERATIONS ---
+  // --- LISTINGS OPERATIONS (Cloud + Memory + File) ---
 
   public getListings(): PGListing[] {
     return [...this.listings];
@@ -138,6 +261,16 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
   public addListing(newListing: PGListing): PGListing {
     this.listings.unshift(newListing);
     this.saveToFile('listing_added');
+
+    // Write to Supabase Cloud Database
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () => client.from('listings').upsert(toSupabaseListing(newListing)),
+        `Save vacancy ${newListing.title}`
+      );
+    }
+
     return newListing;
   }
 
@@ -148,11 +281,22 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     this.listings[index] = {
       ...this.listings[index],
       ...updatedFields,
-      id, // Preserve original ID
+      id,
     };
 
+    const updated = this.listings[index];
     this.saveToFile('listing_updated');
-    return this.listings[index];
+
+    // Update in Supabase Cloud Database
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () => client.from('listings').update(toSupabaseListing(updated)).eq('id', id),
+        `Update vacancy ${updated.title}`
+      );
+    }
+
+    return updated;
   }
 
   public deleteListing(id: string): boolean {
@@ -160,6 +304,16 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     this.listings = this.listings.filter((l) => l.id !== id);
     if (this.listings.length !== initialLen) {
       this.saveToFile('listing_deleted');
+
+      // Delete from Supabase Cloud Database
+      const client = getSupabaseClient();
+      if (client) {
+        this.safeCloudOp(
+          () => client.from('listings').delete().eq('id', id),
+          `Delete vacancy ${id}`
+        );
+      }
+
       return true;
     }
     return false;
@@ -170,6 +324,19 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     if (!listing) return null;
     listing.isAvailable = !listing.isAvailable;
     this.saveToFile('availability_toggled');
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () =>
+          client
+            .from('listings')
+            .update({ is_available: listing.isAvailable, updated_at: new Date().toISOString() })
+            .eq('id', id),
+        `Toggle availability for ${id}`
+      );
+    }
+
     return listing.isAvailable;
   }
 
@@ -178,10 +345,23 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     if (!listing) return null;
     listing.isVerified = !listing.isVerified;
     this.saveToFile('verified_toggled');
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () =>
+          client
+            .from('listings')
+            .update({ is_verified: listing.isVerified, updated_at: new Date().toISOString() })
+            .eq('id', id),
+        `Toggle verified for ${id}`
+      );
+    }
+
     return listing.isVerified;
   }
 
-  // --- USERS OPERATIONS ---
+  // --- USERS OPERATIONS (Cloud + Memory + File) ---
 
   public getUsers(): StoredAccount[] {
     return [...this.users];
@@ -199,6 +379,15 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
   public addUser(user: StoredAccount): StoredAccount {
     this.users.push(user);
     this.saveToFile('user_added');
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () => client.from('users').upsert(toSupabaseUser(user)),
+        `Insert user ${user.name}`
+      );
+    }
+
     return user;
   }
 
@@ -209,22 +398,40 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     this.users[index] = {
       ...this.users[index],
       ...updatedFields,
-      id, // Protect ID
+      id,
     };
 
+    const updated = this.users[index];
     this.saveToFile('user_updated');
-    return this.users[index];
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () => client.from('users').update(toSupabaseUser(updated)).eq('id', id),
+        `Update user ${updated.name}`
+      );
+    }
+
+    return updated;
   }
 
   public deleteUser(id: string): boolean {
     const target = this.users.find((u) => u.id === id);
     if (!target) return false;
-    // Disallow deleting primary admin
     if (target.email.toLowerCase() === 'manthandaundkar33@gmail.com' || target.id === 'demo-user') {
       return false;
     }
     this.users = this.users.filter((u) => u.id !== id);
     this.saveToFile('user_deleted');
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () => client.from('users').delete().eq('id', id),
+        `Delete user ${id}`
+      );
+    }
+
     return true;
   }
 
@@ -233,6 +440,19 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     if (!user) return false;
     user.password = newPassword.trim();
     this.saveToFile('password_reset');
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () =>
+          client
+            .from('users')
+            .update({ password: user.password, updated_at: new Date().toISOString() })
+            .eq('id', id),
+        `Reset password for ${id}`
+      );
+    }
+
     return true;
   }
 
@@ -242,6 +462,19 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
     this.users = JSON.parse(JSON.stringify(DEFAULT_SEED_USERS));
     this.listings = JSON.parse(JSON.stringify(DEFAULT_SEED_LISTINGS));
     this.saveToFile('reset_to_defaults');
+
+    const client = getSupabaseClient();
+    if (client) {
+      this.safeCloudOp(
+        () => client.from('listings').upsert(this.listings.map(toSupabaseListing)),
+        'Reset listings cloud'
+      );
+      this.safeCloudOp(
+        () => client.from('users').upsert(this.users.map(toSupabaseUser)),
+        'Reset users cloud'
+      );
+    }
+
     return { listings: this.listings, users: this.users };
   }
 
@@ -253,6 +486,23 @@ export const INITIAL_LISTINGS: PGListing[] = ${JSON.stringify(this.listings, nul
       this.users = importedUsers;
     }
     this.saveToFile('data_imported');
+
+    const client = getSupabaseClient();
+    if (client) {
+      if (Array.isArray(importedListings)) {
+        this.safeCloudOp(
+          () => client.from('listings').upsert(importedListings.map(toSupabaseListing)),
+          'Import listings cloud'
+        );
+      }
+      if (Array.isArray(importedUsers)) {
+        this.safeCloudOp(
+          () => client.from('users').upsert(importedUsers.map(toSupabaseUser)),
+          'Import users cloud'
+        );
+      }
+    }
+
     return true;
   }
 }

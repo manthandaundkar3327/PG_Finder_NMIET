@@ -3,11 +3,44 @@
     "id": "demo-user",
     "name": "Manthan Daundkar",
     "email": "manthandaundkar33@gmail.com",
-    "phone": "+91 9226556138",
+    "phone": "+91 97654 32190",
     "role": "admin",
-    "collegeBranch": "ECE",
-    "year": "Second Year (SY)",
+    "collegeBranch": "Computer Engineering",
+    "year": "Third Year (TE)",
     "password": "manthan",
+    "createdAt": "01 Nov 2026"
+  },
+  {
+    "id": "student-tanmay",
+    "name": "Tanmay Joshi",
+    "email": "tanmay.joshi@nmiet.edu.in",
+    "phone": "+91 91580 44221",
+    "role": "student",
+    "collegeBranch": "Information Technology",
+    "year": "Final Year (BE)",
+    "password": "password123",
+    "createdAt": "01 Nov 2026"
+  },
+  {
+    "id": "student-shreya",
+    "name": "Shreya Kulkarni",
+    "email": "shreya.k@nmiet.edu.in",
+    "phone": "+91 98220 55114",
+    "role": "student",
+    "collegeBranch": "Computer Engineering",
+    "year": "Second Year (SE)",
+    "password": "password123",
+    "createdAt": "01 Nov 2026"
+  },
+  {
+    "id": "student-rohit",
+    "name": "Rohit Sharma",
+    "email": "rohit.sharma@nmiet.edu.in",
+    "phone": "+91 98231 77620",
+    "role": "student",
+    "collegeBranch": "Mechanical Engineering",
+    "year": "Third Year (TE)",
+    "password": "password123",
     "createdAt": "01 Nov 2026"
   }
 ]
