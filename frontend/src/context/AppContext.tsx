@@ -121,6 +121,19 @@ const INITIAL_USERS: StoredAccount[] = [
   },
 ];
 
+// Broadcast across browser tabs on the same device
+const broadcastLocalChannel = (newListings?: PGListing[], newUsers?: StoredAccount[]) => {
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('pg_finder_live_channel');
+      channel.postMessage({ listings: newListings, users: newUsers });
+      channel.close();
+    }
+  } catch {
+    // ignore
+  }
+};
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -215,10 +228,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Sync initial data from backend API on mount
+  // Real-time live synchronization with all users and admin across the entire website
   useEffect(() => {
     let isMounted = true;
+    let eventSource: EventSource | null = null;
+    let localBroadcast: BroadcastChannel | null = null;
 
+    const applyLiveUpdate = (data: { listings?: PGListing[]; users?: StoredAccount[] }) => {
+      if (!isMounted || !data) return;
+
+      if (Array.isArray(data.listings) && data.listings.length > 0) {
+        setListings(data.listings);
+
+        // Keep active detail modal in sync with any live modifications
+        setSelectedListing((prev) => {
+          if (!prev) return null;
+          const updated = data.listings?.find((item: PGListing) => item.id === prev.id);
+          return updated || prev;
+        });
+      }
+
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        setAccounts(data.users);
+      }
+    };
+
+    // 1. Initial HTTP fetch for fast initial load
     fetch('/api/listings')
       .then((res) => res.json())
       .then((data) => {
@@ -241,8 +276,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Backend users not loaded directly, using local store', err);
       });
 
+    // 2. Connect to Server-Sent Events (SSE) for instant real-time live updates
+    try {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.addEventListener('init', (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          applyLiveUpdate(parsed);
+        } catch (err) {
+          console.warn('[Realtime] Failed to parse init event:', err);
+        }
+      });
+
+      eventSource.addEventListener('update', (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          applyLiveUpdate(parsed);
+        } catch (err) {
+          console.warn('[Realtime] Failed to parse update event:', err);
+        }
+      });
+
+      eventSource.onmessage = (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          applyLiveUpdate(parsed);
+        } catch (err) {
+          console.warn('[Realtime] Failed to parse message event:', err);
+        }
+      };
+
+      eventSource.onerror = () => {
+        // EventSource will automatically retry connection every 2s
+      };
+    } catch (e) {
+      console.warn('[Realtime] EventSource connection failed:', e);
+    }
+
+    // 3. Local Cross-Tab Sync via BroadcastChannel (0ms latency for tabs on same browser)
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        localBroadcast = new BroadcastChannel('pg_finder_live_channel');
+        localBroadcast.onmessage = (event) => {
+          if (event.data) {
+            applyLiveUpdate(event.data);
+          }
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    // 4. Polling fallback every 5s in case SSE is blocked by an upstream proxy
+    const pollTimer = setInterval(() => {
+      fetch('/api/listings')
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted && data.success && Array.isArray(data.listings)) {
+            setListings(data.listings);
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+
     return () => {
       isMounted = false;
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (localBroadcast) {
+        localBroadcast.close();
+      }
+      clearInterval(pollTimer);
     };
   }, []);
 
@@ -350,8 +456,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         password: password || 'manthan',
         createdAt: formattedToday,
       };
-      setAccounts((prev) => [...prev, newAcc]);
+      const updatedAccounts = [...accounts, newAcc];
+      setAccounts(updatedAccounts);
       setCurrentUser(newAcc);
+      broadcastLocalChannel(listings, updatedAccounts);
       showToast(`Welcome to PG Finder NMIET, ${newAcc.name}!`, 'success');
       closeAuthModal();
 
@@ -406,7 +514,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: formattedToday,
     };
 
-    setAccounts((prev) => [...prev, newAccount]);
+    const updatedAccounts = [...accounts, newAccount];
+    setAccounts(updatedAccounts);
+    broadcastLocalChannel(listings, updatedAccounts);
     const { password: _, ...userSafe } = newAccount;
     setCurrentUser(userSafe);
     showToast(`Registration complete! Welcome, ${profile.name}.`, 'success');
@@ -444,7 +554,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isSaved = (id: string) => savedIds.includes(id);
 
-  // Add Listing (Student or Admin) -> Updates state and backend data file
+  // Add Listing (Student or Admin) -> Immediately updates all users & writes to backend files
   const addListing = (
     newListingData: Omit<PGListing, 'id' | 'postedDate' | 'rating' | 'reviewsCount'>
   ) => {
@@ -462,8 +572,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reviewsCount: 1,
     };
 
-    setListings((prev) => [newListing, ...prev]);
-    showToast('Vacancy published and updated in backend data files!', 'success');
+    const updatedListings = [newListing, ...listings];
+    setListings(updatedListings);
+    broadcastLocalChannel(updatedListings, accounts);
+    showToast('Vacancy published! Live updated to all users.', 'success');
     setActiveTab('my-posts');
 
     fetch('/api/listings', {
@@ -482,13 +594,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch((err) => console.error('Failed to save listing to backend file:', err));
   };
 
-  // Update Listing (Student or Admin) -> Updates state and backend data file
+  // Update Listing (Student or Admin) -> Immediately updates all users & writes to backend files
   const updateListing = (updated: PGListing) => {
-    setListings((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    const updatedListings = listings.map((item) => (item.id === updated.id ? updated : item));
+    setListings(updatedListings);
     if (selectedListing?.id === updated.id) {
       setSelectedListing(updated);
     }
-    showToast('Vacancy data and date updated in backend files', 'success');
+    broadcastLocalChannel(updatedListings, accounts);
+    showToast('Vacancy updated! Live updated to all users.', 'success');
     setEditingListing(null);
 
     fetch(`/api/listings/${updated.id}`, {
@@ -498,73 +612,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch((err) => console.error('Failed to update listing on backend file:', err));
   };
 
-  // Delete Listing -> Removes from state and backend data file
+  // Delete Listing -> Immediately updates all users & writes to backend files
   const deleteListing = (id: string) => {
-    setListings((prev) => prev.filter((item) => item.id !== id));
+    const updatedListings = listings.filter((item) => item.id !== id);
+    setListings(updatedListings);
     if (selectedListing?.id === id) {
       setSelectedListing(null);
     }
-    showToast('Listing removed from backend data files', 'info');
+    broadcastLocalChannel(updatedListings, accounts);
+    showToast('Listing removed! Live updated to all users.', 'info');
 
     fetch(`/api/listings/${id}`, {
       method: 'DELETE',
     }).catch((err) => console.error('Failed to delete listing on backend file:', err));
   };
 
-  // Toggle Availability -> Updates state and backend data file
+  // Toggle Availability -> Immediately updates all users & writes to backend files
   const toggleAvailability = (id: string) => {
-    setListings((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const nextState = !item.isAvailable;
-          showToast(
-            nextState ? 'Status set to: Available' : 'Status set to: Occupied / Filled',
-            'info'
-          );
-          return { ...item, isAvailable: nextState };
-        }
-        return item;
-      })
-    );
+    let nextState = false;
+    const updatedListings = listings.map((item) => {
+      if (item.id === id) {
+        nextState = !item.isAvailable;
+        showToast(
+          nextState ? 'Status set to: Available' : 'Status set to: Occupied / Filled',
+          'info'
+        );
+        return { ...item, isAvailable: nextState };
+      }
+      return item;
+    });
+
+    setListings(updatedListings);
+    broadcastLocalChannel(updatedListings, accounts);
 
     fetch(`/api/listings/${id}/availability`, {
       method: 'PATCH',
     }).catch((err) => console.error('Failed to toggle availability on backend:', err));
   };
 
-  // Admin Toggle Verified -> Updates state and backend data file
+  // Admin Toggle Verified -> Immediately updates all users & writes to backend files
   const adminToggleVerified = (id: string) => {
-    setListings((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const next = !item.isVerified;
-          showToast(
-            next
-              ? `Verified badge granted to "${item.title}"`
-              : `Verified badge removed from "${item.title}"`,
-            'info'
-          );
-          return { ...item, isVerified: next };
-        }
-        return item;
-      })
-    );
+    let next = false;
+    const updatedListings = listings.map((item) => {
+      if (item.id === id) {
+        next = !item.isVerified;
+        showToast(
+          next
+            ? `Verified badge granted to "${item.title}"`
+            : `Verified badge removed from "${item.title}"`,
+          'info'
+        );
+        return { ...item, isVerified: next };
+      }
+      return item;
+    });
+
+    setListings(updatedListings);
+    broadcastLocalChannel(updatedListings, accounts);
 
     fetch(`/api/listings/${id}/verified`, {
       method: 'PATCH',
     }).catch((err) => console.error('Failed to toggle verified status on backend:', err));
   };
 
-  // Admin Update User -> Updates state and backend data file
+  // Admin Update User -> Immediately updates all users & writes to backend files
   const adminUpdateUser = (updatedUser: StoredAccount) => {
-    setAccounts((prev) =>
-      prev.map((acc) => (acc.id === updatedUser.id ? updatedUser : acc))
+    const updatedAccounts = accounts.map((acc) =>
+      acc.id === updatedUser.id ? updatedUser : acc
     );
+    setAccounts(updatedAccounts);
     if (currentUser?.id === updatedUser.id) {
       const { password: _, ...safeUser } = updatedUser;
       setCurrentUser(safeUser);
     }
-    showToast(`User account "${updatedUser.name}" updated in backend files`, 'success');
+    broadcastLocalChannel(listings, updatedAccounts);
+    showToast(`User account "${updatedUser.name}" updated! Live updated to all users.`, 'success');
 
     fetch(`/api/auth/users/${updatedUser.id}`, {
       method: 'PUT',
@@ -573,7 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch((err) => console.error('Failed to update user on backend:', err));
   };
 
-  // Admin Delete User -> Removes from state and backend data file
+  // Admin Delete User -> Immediately updates all users & writes to backend files
   const adminDeleteUser = (userId: string): boolean => {
     const target = accounts.find((a) => a.id === userId);
     if (!target) return false;
@@ -584,8 +706,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Master admin account cannot be deleted!', 'error');
       return false;
     }
-    setAccounts((prev) => prev.filter((a) => a.id !== userId));
-    showToast(`Account for "${target.name}" removed from backend files`, 'info');
+    const updatedAccounts = accounts.filter((a) => a.id !== userId);
+    setAccounts(updatedAccounts);
+    broadcastLocalChannel(listings, updatedAccounts);
+    showToast(`Account for "${target.name}" removed! Live updated to all users.`, 'info');
 
     fetch(`/api/auth/users/${userId}`, {
       method: 'DELETE',
@@ -594,7 +718,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Admin Create User -> Adds to state and backend data file
+  // Admin Create User -> Immediately updates all users & writes to backend files
   const adminCreateUser = (newUser: StoredAccount): boolean => {
     const existing = accounts.find(
       (a) => a.email.toLowerCase() === newUser.email.trim().toLowerCase()
@@ -614,8 +738,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: newUser.email.trim(),
       createdAt: newUser.createdAt || formattedToday,
     };
-    setAccounts((prev) => [...prev, created]);
-    showToast(`New user "${created.name}" created and saved to backend file`, 'success');
+    const updatedAccounts = [...accounts, created];
+    setAccounts(updatedAccounts);
+    broadcastLocalChannel(listings, updatedAccounts);
+    showToast(`New user "${created.name}" created! Live updated to all users.`, 'success');
 
     fetch('/api/auth/users', {
       method: 'POST',
@@ -626,18 +752,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Admin Reset Password -> Updates state and backend data file
+  // Admin Reset Password -> Immediately updates all users & writes to backend files
   const adminResetPassword = (userId: string, newPassword: string): boolean => {
     if (!newPassword || newPassword.trim().length < 4) {
       showToast('Password must be at least 4 characters', 'error');
       return false;
     }
-    setAccounts((prev) =>
-      prev.map((acc) =>
-        acc.id === userId ? { ...acc, password: newPassword.trim() } : acc
-      )
+    const updatedAccounts = accounts.map((acc) =>
+      acc.id === userId ? { ...acc, password: newPassword.trim() } : acc
     );
-    showToast('Password updated and saved to backend file', 'success');
+    setAccounts(updatedAccounts);
+    broadcastLocalChannel(listings, updatedAccounts);
+    showToast('Password updated! Live updated to all users.', 'success');
 
     fetch(`/api/auth/users/${userId}/password`, {
       method: 'PATCH',
@@ -648,7 +774,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Admin Reset All Data -> Resets state and backend data files to default seed
+  // Admin Reset All Data -> Immediately updates all users & writes to backend files
   const adminResetAllData = () => {
     setListings(INITIAL_LISTINGS);
     setAccounts(INITIAL_USERS);
@@ -657,7 +783,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('pg_finder_nmiet_listings');
     localStorage.removeItem('pg_finder_nmiet_accounts');
     localStorage.removeItem('pg_finder_nmiet_saved');
-    showToast('All platform data reset to default seed state in backend files', 'info');
+    broadcastLocalChannel(INITIAL_LISTINGS, INITIAL_USERS);
+    showToast('All platform data reset to defaults! Live updated to all users.', 'info');
 
     fetch('/api/admin/reset', {
       method: 'POST',
@@ -676,17 +803,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return JSON.stringify(exportObject, null, 2);
   };
 
-  // Admin Import Data -> Imports and writes directly to backend data files
+  // Admin Import Data -> Immediately updates all users & writes to backend files
   const adminImportData = (jsonData: string): boolean => {
     try {
       const parsed = JSON.parse(jsonData);
+      let nextListings = listings;
+      let nextAccounts = accounts;
+
       if (Array.isArray(parsed.listings)) {
-        setListings(parsed.listings);
+        nextListings = parsed.listings;
+        setListings(nextListings);
       }
       if (Array.isArray(parsed.accounts)) {
-        setAccounts(parsed.accounts);
+        nextAccounts = parsed.accounts;
+        setAccounts(nextAccounts);
       }
-      showToast('Platform data imported and written to backend data files!', 'success');
+      broadcastLocalChannel(nextListings, nextAccounts);
+      showToast('Platform data imported! Live updated to all users.', 'success');
 
       fetch('/api/admin/import', {
         method: 'POST',

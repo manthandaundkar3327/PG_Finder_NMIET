@@ -64,6 +64,10 @@ export const Header: React.FC = () => {
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                   NMIET
                 </span>
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Real-time live sync active across all users">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Live
+                </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
                 CampusNest · Talegaon Dabhade
