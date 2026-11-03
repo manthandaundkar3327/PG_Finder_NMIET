@@ -11,17 +11,6 @@
     "createdAt": "01 Nov 2026"
   },
   {
-    "id": "student-tanmay",
-    "name": "Tanmay Joshi",
-    "email": "tanmay.joshi@nmiet.edu.in",
-    "phone": "+91 91580 44221",
-    "role": "student",
-    "collegeBranch": "Information Technology",
-    "year": "Final Year (BE)",
-    "password": "password123",
-    "createdAt": "01 Nov 2026"
-  },
-  {
     "id": "student-shreya",
     "name": "Shreya Kulkarni",
     "email": "shreya.k@nmiet.edu.in",
